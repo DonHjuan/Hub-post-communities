@@ -1,0 +1,206 @@
+<html>
+    <head>
+        <title>Hub post communities</title>
+        <script src="sigma.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/1.2.1/plugins/sigma.parsers.gexf.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+        <style>
+            html { height:100%;}
+            body {height: 100%; margin: 0px}
+            #sigma-container { width:75%; height:100%; background-color:#ffffff; float: right}
+            #infobox { width:25%; height: 100%; float: left; overflow-y: scroll}
+
+            #previewimg {
+                height: 20vh;
+                max-width: 50%;
+                padding-left: 4px;
+                padding-right: 4px;
+                padding-top: 4px;
+                float: left;
+                object-fit: contain;
+                box-sizing: border-box
+            }
+
+            #databox {
+                padding-left: 10px;
+                padding-top: 10px;
+                height: 20vh;
+                overflow: hidden;
+                box-sizing: border-box
+            }
+
+            .row {
+                display: flex;
+                flex-wrap: wrap;
+                padding: 0 4px;
+            }
+
+            /* Create four equal columns that sits next to each other */
+            .column {
+                flex: 20%;
+                max-width: 25%;
+                padding: 0 4px;
+            }
+
+            .column img {
+                margin-top: 8px;
+                vertical-align: middle;
+                width: 100%;
+                max-height: 20vh;
+                object-fit: contain;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="infobox">
+            <a id="previewlink" href="hypnohub.net">
+                <img id="previewimg" src="https://hypnohub.net/images/logo.png?v2"></img>
+            </a>
+            <div id="databox"></div>
+            <div class="row">
+                <div id="col0" class="column"></div>
+                <div id="col1" class="column"></div>
+                <div id="col2" class="column"></div>
+                <div id="col3" class="column"></div>
+            </div>
+        </div>
+        <div id='sigma-container'></div>
+        <script>
+            // Initialize sigma:
+            const s = new sigma({
+                renderer: {
+                    container: document.getElementById('sigma-container'),
+                    type: 'webgl'
+                },
+                settings: {
+                    drawLabels: false,
+                    drawEdgeLabels: false,
+                    drawEdges: false,
+                    minNodeSize: 0.65,
+                    maxNodeSize: 3,
+                    enableHovering: true,
+                    doubleClickEnabled: false,
+                    singleHover: true
+                }
+            });
+
+            sigma.parsers.gexf(
+                'hub_modularity.gexf',
+                s,
+                function() {
+                    const defocusColor = 'rgb(240,240,240)';
+
+                    const imgCols = [document.getElementById('col0'), document.getElementById('col1'), document.getElementById('col2'), document.getElementById('col3')]
+                    const infobox = document.getElementById('infobox');
+
+                    const previewImg = document.getElementById('previewimg');
+                    const previewLink = document.getElementById('previewlink');
+
+                    function getNodeImportance(node) {
+                        return node.attributes['weighted degree'] * node.attributes.score
+                    }
+
+                    function appendPreviewImgs(nodes) {
+                        let col = 0;
+                        for (let node of nodes) {
+                            const nodeImg = document.createElement('img')
+                            nodeImg.src = node.attributes.preview_url
+
+                            const link = document.createElement('a')
+                            link.href = 'https://hypnohub.net/post/show/' + node.label
+                            link.appendChild(nodeImg)
+                            
+                            imgCols[col].appendChild(link)
+
+                            col = (col + 1) % 4
+                        }
+                    }
+
+                    function setPreview(node) {
+                        if (!node) {
+                            return
+                        }
+
+                        previewImg.src = node.attributes.preview_url
+                        previewLink.href = 'https://hypnohub.net/post/show/' + node.label
+                    }
+
+                    let hoveredNode = null
+
+                    const hoverDef = sigma.canvas.hovers.def
+                    sigma.canvas.hovers.def = function(node, context, settings) {
+                        hoveredNode = node
+                        setPreview(hoveredNode)
+
+                        hoverDef(node, context, settings)
+                    }
+
+                    s.bind('outNode', e => {
+                        if (e.data.node === hoveredNode) {
+                            hoveredNode = null
+                            setPreview(previewImg.selectedNode)
+                        }
+                    })
+
+                    s.graph.nodes().forEach(n => {
+                        n.originalColor = n.color;
+                        //n.defocusColor = 'rgb(240,240,240)' //'rgba(' + n.color.split('(')[1].split(')')[0] + ',0.3)'
+                    });
+
+                    $(infobox).scroll(function() {
+                        if($(this).scrollTop() + $(this).innerHeight() >= $(this)[0].scrollHeight) {
+                            const newNodes = infobox.groupNodes.splice(infobox.curNodes, infobox.curNodes + 100)
+                            infobox.curNodes += 100
+
+                            appendPreviewImgs(newNodes)
+                        }
+                    });
+
+                    s.bind('clickNode', e => {
+                        const group = e.data.node.attributes.modularity_class
+                        s.graph.nodes().forEach(n => {
+                            if (n.attributes.modularity_class === group) {
+                                n.color = n.originalColor;
+                            } else {
+                                n.color = defocusColor;
+                            }
+                        });
+                        
+                        previewImg.selectedNode = e.data.node
+                        setPreview(previewImg.selectedNode)
+                        //console.log('selected ' + previewImg.selectedNode.label)                 
+
+                        const groupNodes = s.graph.nodes().filter(n => n.attributes.modularity_class === group).sort((a,b) => (getNodeImportance(a) > getNodeImportance(b)) ? -1 : 1)
+                        
+                        for (let col of imgCols) {
+                            while (col.firstChild) {
+                                col.removeChild(col.firstChild);
+                            }
+                        }
+                        
+                        appendPreviewImgs(groupNodes.slice(0, 100))
+                        
+                        infobox.groupNodes = groupNodes;
+                        infobox.curNodes = 100
+
+                        s.refresh()
+                    })
+
+                    s.bind('clickStage', e => {
+                        s.graph.nodes().forEach(n => {
+                            n.color = n.originalColor;
+                        });
+                        s.refresh()
+
+                        previewImg.selectedNode = null;
+                        setPreview(null)
+                    })
+
+                    s.refresh();
+                }
+            );
+
+            
+        </script>
+    </body>
+</html>
