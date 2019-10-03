@@ -4,6 +4,7 @@
         <script src="sigma.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/1.2.1/plugins/sigma.parsers.gexf.min.js"></script>
         <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+        <script src="community_unique.json"></script>
         <style>
             html { height:100%;}
             body {height: 100%; margin: 0px}
@@ -16,12 +17,14 @@
                 padding-left: 4px;
                 padding-right: 4px;
                 padding-top: 4px;
-                float: left;
+                float: right;
                 object-fit: contain;
                 box-sizing: border-box
             }
 
             #databox {
+                font-family: verdana,sans-serif;
+                font-size: 1em;
                 padding-left: 10px;
                 padding-top: 10px;
                 height: 20vh;
@@ -53,7 +56,7 @@
     </head>
     <body>
         <div id="infobox">
-            <a id="previewlink" href="hypnohub.net">
+            <a id="previewlink" href="https://hypnohub.net/post">
                 <img id="previewimg" src="https://hypnohub.net/images/logo.png?v2"></img>
             </a>
             <div id="databox"></div>
@@ -92,6 +95,8 @@
 
                     const imgCols = [document.getElementById('col0'), document.getElementById('col1'), document.getElementById('col2'), document.getElementById('col3')]
                     const infobox = document.getElementById('infobox');
+
+                    const databox = document.getElementById('databox');
 
                     const previewImg = document.getElementById('previewimg');
                     const previewLink = document.getElementById('previewlink');
@@ -170,8 +175,12 @@
                         setPreview(previewImg.selectedNode)
                         //console.log('selected ' + previewImg.selectedNode.label)                 
 
+                        databox.innerHTML = communityInfo[group].join("&nbsp; ")
+                        //console.log(group)
+
                         const groupNodes = s.graph.nodes().filter(n => n.attributes.modularity_class === group).sort((a,b) => (getNodeImportance(a) > getNodeImportance(b)) ? -1 : 1)
-                        
+                        //console.log(groupNodes.length)
+
                         for (let col of imgCols) {
                             while (col.firstChild) {
                                 col.removeChild(col.firstChild);
