@@ -17,7 +17,7 @@
         <style>
             html { height:100%;}
             body {height: 100%; margin: 0px}
-            #sigma-container { width:75%; height:100%; background-color:#ffffff; float: right}
+            #sigma-container { width:75%; height:100%; background-color:#ffffff; float: right; position: relative;}
             #infobox { width:25%; height: 100%; float: left; overflow-y: scroll}
 
             #previewimg {
@@ -31,14 +31,37 @@
                 box-sizing: border-box
             }
 
+            #searchbox {
+                width: 100%;
+                padding-top: 10px;
+                padding-left: 10px;
+                padding-bottom: 4px;
+                font-family: sans-serif;
+            }
+
+            #tagsearch {
+                width: 70%;
+            }
+
             #databox {
                 font-family: verdana,sans-serif;
                 font-size: 1em;
                 padding-left: 10px;
-                padding-top: 10px;
+                padding-top: 4px;
                 height: 20vh;
                 overflow: hidden;
                 box-sizing: border-box
+            }
+
+            #loading-text {
+                position: absolute;
+                text-align: center;
+                font-size: 10vw;
+                font-family: sans-serif;
+                color: #909090;
+                left: 0;
+                right: 0;
+                bottom: 50%;
             }
 
             .row {
@@ -65,6 +88,10 @@
     </head>
     <body>
         <div id="infobox">
+            <div id="searchbox">
+                <input type="text" name="tags" id="tagsearch" autocapitalize="off" spellcheck="false">
+                <input type="button" id="searchbutton" value="Search tags" onclick="doTagSearch()">
+            </div>
             <a id="previewlink" href="https://hypnohub.net/post">
                 <img id="previewimg" src="https://hypnohub.net/images/logo.png?v2"></img>
             </a>
@@ -76,7 +103,9 @@
                 <div id="col3" class="column"></div>
             </div>
         </div>
-        <div id='sigma-container'></div>
+        <div id='sigma-container'>
+            <div id="loading-text">Loading...</div>
+        </div>
         <script>
             // Initialize sigma:
             const s = new sigma({
@@ -97,7 +126,7 @@
             });
 
             sigma.parsers.gexf(
-                'hub_modularity.gexf',
+                'hub_modularity.json',
                 s,
                 function() {
                     const defocusColor = 'rgb(240,240,240)';
@@ -112,6 +141,16 @@
 
                     function getNodeImportance(node) {
                         return node.attributes['weighted degree'] * node.attributes.score
+                    }
+
+                    function hasTags(postTags, searchTags) {
+                        for (let tag of searchTags) {
+                            if (postTags.indexOf(tag) === -1) {
+                                return false
+                            }
+                        }
+
+                        return true
                     }
 
                     function appendPreviewImgs(nodes) {
@@ -130,6 +169,19 @@
                         }
                     }
 
+                    function setPreviewImgs(nodes) {
+                        for (let col of imgCols) {
+                            while (col.firstChild) {
+                                col.removeChild(col.firstChild);
+                            }
+                        }
+                        
+                        appendPreviewImgs(nodes.slice(0, 100))
+                        
+                        infobox.groupNodes = nodes;
+                        infobox.curNodes = 100
+                    }
+
                     function setPreview(node) {
                         if (!node) {
                             return
@@ -138,6 +190,8 @@
                         previewImg.src = node.attributes.preview_url
                         previewLink.href = 'https://hypnohub.net/post/show/' + node.label
                     }
+
+                    let lastGroup = false;
 
                     let hoveredNode = null
 
@@ -190,35 +244,66 @@
                         const groupNodes = s.graph.nodes().filter(n => n.attributes.modularity_class === group).sort((a,b) => (getNodeImportance(a) > getNodeImportance(b)) ? -1 : 1)
                         //console.log(groupNodes.length)
 
-                        for (let col of imgCols) {
-                            while (col.firstChild) {
-                                col.removeChild(col.firstChild);
-                            }
-                        }
+                        setPreviewImgs(groupNodes)
                         
-                        appendPreviewImgs(groupNodes.slice(0, 100))
-                        
-                        infobox.groupNodes = groupNodes;
-                        infobox.curNodes = 100
+                        lastGroup = true;
 
                         s.refresh()
                     })
 
                     s.bind('clickStage', e => {
-                        s.graph.nodes().forEach(n => {
-                            n.color = n.originalColor;
-                        });
-                        s.refresh()
+                        if (lastGroup) {
+                            s.graph.nodes().forEach(n => {
+                                n.color = n.originalColor;
+                            });
+                            s.refresh()
+                        }
 
                         previewImg.selectedNode = null;
                         setPreview(null)
                     })
 
+                    window.doTagSearch = function doTagSearch() {
+                        if (window.allTags === undefined) {
+                            alert("Tags not loaded yet, please wait before searching")
+                        }
+
+                        lastGroup = false;
+
+                        const searchTags = document.getElementById("tagsearch").value.split(' ').filter(tag => tag.length > 0)
+                        console.log(searchTags)
+
+                        databox.innerHTML = searchTags.join("&nbsp; ")
+
+                        let groupNodes = [];
+                        for (let node of s.graph.nodes()) {
+                            if (hasTags(allTags[node.label], searchTags)) {
+                                groupNodes.push(node)
+                                node.color = node.originalColor;
+                            } else {
+                                node.color = defocusColor;
+                            }
+                        }
+                        groupNodes = groupNodes.sort((a,b) => (getNodeImportance(a) > getNodeImportance(b)) ? -1 : 1)
+
+                        setPreviewImgs(groupNodes)
+
+                        s.refresh()
+                    }
+
                     s.refresh();
+
+                    document.getElementById('loading-text').remove()
                 }
             );
 
-            
+            document.getElementById('tagsearch').addEventListener('keyup', event => {
+                if (event.keyCode === 13) {
+                    event.preventDefault();
+                    document.getElementById('searchbutton').click();
+                }
+            });
         </script>
+        <script src="all_tags.json" type="text/javascript" async></script>
     </body>
 </html>
